@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<info>
+  <id>sipcall</id>
+  <name>SIP Call</name>
+  <description>Enable international SIP calls from Nextcloud Talk</description>
+  <version>0.1.0</version>
+  <license>agpl</license>
+  <author>Your Name</author>
+  <namespace>SipCall</namespace>
+  <default_enable>true</default_enable>
+  <dependencies>
+    <nextcloud min-version="27" max-version="30" />
+  </dependencies>
+</info>
