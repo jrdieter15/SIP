@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIPCall Frontend Test</title>
+    
+    <!-- Load CSS -->
+    <link rel="stylesheet" href="css/index.css">
+    <link rel="stylesheet" href="css/sipcall.css">
+    
+    <!-- Load Vue.js from CDN for testing -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body>
+    <div id="app">
+        <h1>SIPCall Frontend Integration Test</h1>
+        
+        <!-- API Connection Test -->
+        <div class="test-section">
+            <h2>API Connection Test</h2>
+            <button @click="testConnection" :disabled="testing">
+                {{ testing ? 'Testing...' : 'Test Backend Connection' }}
+            </button>
+            <div v-if="connectionResult" class="result" :class="connectionResult.success ? 'success' : 'error'">
+                {{ connectionResult.message }}
+            </div>
+        </div>
+        
+        <!-- Authentication Test -->
+        <div class="test-section">
+            <h2>Authentication Test</h2>
+            <button @click="testAuth" :disabled="testing">
+                {{ testing ? 'Testing...' : 'Test Authentication' }}
+            </button>
+            <div v-if="authResult" class="result" :class="authResult.success ? 'success' : 'error'">
+                {{ authResult.message }}
+            </div>
+        </div>
+        
+        <!-- Call API Test -->
+        <div class="test-section">
+            <h2>Call API Test</h2>
+            <input v-model="testNumber" placeholder="Enter test number" />
+            <button @click="testCall" :disabled="testing || !isAuthenticated">
+                {{ testing ? 'Testing...' : 'Test Call Initiation' }}
+            </button>
+            <div v-if="callResult" class="result" :class="callResult.success ? 'success' : 'error'">
+                {{ callResult.message }}
+            </div>
+        </div>
+        
+        <!-- SIPCall App Integration -->
+        <div class="test-section">
+            <h2>Full SIPCall App</h2>
+            <div id="sipcall-app"></div>
+        </div>
+    </div>
+
+    <!-- Load API Client -->
+    <script src="js/api-client.js"></script>
+    
+    <!-- Test Application -->
+    <script>
+        const { createApp } = Vue;
+        
+        // Test App
+        createApp({
+            data() {
+                return {
+                    testing: false,
+                    connectionResult: null,
+                    authResult: null,
+                    callResult: null,
+                    testNumber: '+1234567890',
+                    isAuthenticated: false
+                };
+            },
+            
+            methods: {
+                async testConnection() {
+                    this.testing = true;
+                    this.connectionResult = null;
+                    
+                    try {
+                        const response = await fetch('/api/v1/health');
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.connectionResult = {
+                                success: true,
+                                message: `✅ Backend connected! Status: ${data.status}`
+                            };
+                        } else {
+                            this.connectionResult = {
+                                success: false,
+                                message: `❌ Backend error: ${response.status}`
+                            };
+                        }
+                    } catch (error) {
+                        this.connectionResult = {
+                            success: false,
+                            message: `❌ Connection failed: ${error.message}`
+                        };
+                    }
+                    
+                    this.testing = false;
+                },
+                
+                async testAuth() {
+                    this.testing = true;
+                    this.authResult = null;
+                    
+                    try {
+                        const response = await window.sipCallAPI.authenticate(
+                            'mock_oauth_code',
+                            window.location.origin
+                        );
+                        
+                        this.authResult = {
+                            success: true,
+                            message: `✅ Authentication successful! Token: ${response.access_token.substring(0, 20)}...`
+                        };
+                        this.isAuthenticated = true;
+                    } catch (error) {
+                        this.authResult = {
+                            success: false,
+                            message: `❌ Authentication failed: ${error.message}`
+                        };
+                    }
+                    
+                    this.testing = false;
+                },
+                
+                async testCall() {
+                    this.testing = true;
+                    this.callResult = null;
+                    
+                    try {
+                        const response = await window.sipCallAPI.initiateCall(
+                            this.testNumber,
+                            null,
+                            false
+                        );
+                        
+                        this.callResult = {
+                            success: true,
+                            message: `✅ Call initiated! ID: ${response.call_id}, Status: ${response.status}`
+                        };
+                    } catch (error) {
+                        this.callResult = {
+                            success: false,
+                            message: `❌ Call failed: ${error.message}`
+                        };
+                    }
+                    
+                    this.testing = false;
+                }
+            }
+        }).mount('#app');
+    </script>
+    
+    <!-- Load SIPCall App -->
+    <script src="js/sipcall-app.js"></script>
+    
+    <style>
+        body {
+            font-family: var(--font-sans);
+            margin: 20px;
+            background-color: var(--color-background);
+            color: var(--color-foreground);
+        }
+        
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            background-color: var(--color-card);
+        }
+        
+        .test-section h2 {
+            margin-top: 0;
+            color: var(--color-primary);
+        }
+        
+        button {
+            padding: 10px 20px;
+            margin: 10px 5px;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            background-color: var(--color-primary);
+            color: var(--color-primary-foreground);
+            cursor: pointer;
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        input {
+            padding: 10px;
+            margin: 10px 5px;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            background-color: var(--color-background);
+            color: var(--color-foreground);
+        }
+        
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: var(--radius-lg);
+        }
+        
+        .result.success {
+            background-color: var(--color-accent);
+            color: var(--color-accent-foreground);
+        }
+        
+        .result.error {
+            background-color: var(--color-destructive);
+            color: var(--color-destructive-foreground);
+        }
+    </style>
+</body>
+</html>

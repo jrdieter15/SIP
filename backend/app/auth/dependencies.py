@@ -10,6 +10,7 @@ import structlog
 
 from app.database import get_session, User
 from app.auth.jwt_handler import jwt_handler
+from datetime import datetime
 
 logger = structlog.get_logger()
 
@@ -43,6 +44,7 @@ async def get_current_user(
         )
     
     # Update last login
+    from datetime import datetime
     user.last_login = datetime.utcnow()
     session.add(user)
     session.commit()
