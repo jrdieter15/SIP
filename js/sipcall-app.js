@@ -1,11 +1,21 @@
 /**
- * SIPCall Vue.js Application
- * Main application component with call functionality
+ * SIPCall Vue.js Application - Modular Version
+ * Main application component with modular architecture
  */
 
-import { createApp } from 'vue';
+import DialpadSection from './components/DialpadSection.js';
+import CallStatusSection from './components/CallStatusSection.js';
+import CallHistorySection from './components/CallHistorySection.js';
+import AdminDashboardSection from './components/AdminDashboardSection.js';
 
 const SIPCallApp = {
+    components: {
+        DialpadSection,
+        CallStatusSection,
+        CallHistorySection,
+        AdminDashboardSection
+    },
+    
     data() {
         return {
             // Authentication state
@@ -21,11 +31,12 @@ const SIPCallApp = {
             // UI state
             destinationNumber: '',
             privacyMode: false,
-            isDialpadVisible: true,
             
             // Call history
             callHistory: [],
             historyLoading: false,
+            totalCount: 0,
+            hasMore: false,
             
             // Error handling
             error: null,
@@ -33,41 +44,28 @@ const SIPCallApp = {
             
             // Call controls
             isMuted: false,
-            isOnHold: false
+            isOnHold: false,
+            
+            // Feature flags
+            enterpriseFeaturesEnabled: false,
+            availableFeatures: {
+                core_features: [],
+                enterprise_features: []
+            }
         };
     },
 
     computed: {
-        /**
-         * Format call duration for display
-         */
-        formattedDuration() {
-            const minutes = Math.floor(this.callDuration / 60);
-            const seconds = this.callDuration % 60;
-            return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        },
-
-        /**
-         * Check if call is active
-         */
         isCallActive() {
             return ['initiated', 'ringing', 'answered'].includes(this.callStatus);
         },
-
-        /**
-         * Get call status display text
-         */
-        callStatusText() {
-            const statusMap = {
-                'idle': 'Idle',
-                'initiated': 'Connecting...',
-                'ringing': 'Ringing...',
-                'answered': 'In Progress',
-                'completed': 'Call Ended',
-                'failed': 'Call Failed',
-                'on_hold': 'On Hold'
-            };
-            return statusMap[this.callStatus] || this.callStatus;
+        
+        isAdmin() {
+            return this.user?.permissions?.is_admin || false;
+        },
+        
+        showAdminDashboard() {
+            return this.isAdmin && this.enterpriseFeaturesEnabled;
         }
     },
 
@@ -77,6 +75,7 @@ const SIPCallApp = {
 
     beforeUnmount() {
         this.clearCallTimer();
+        this.stopCallStatusPolling();
     },
 
     methods: {
@@ -85,6 +84,9 @@ const SIPCallApp = {
          */
         async initializeApp() {
             try {
+                // Load available features
+                await this.loadAvailableFeatures();
+                
                 // Check if user is authenticated
                 if (window.sipCallAPI.isAuthenticated()) {
                     await this.loadUserProfile();
@@ -96,6 +98,21 @@ const SIPCallApp = {
             } catch (error) {
                 console.error('App initialization failed:', error);
                 this.showError('Failed to initialize application');
+            }
+        },
+        
+        /**
+         * Load available features from backend
+         */
+        async loadAvailableFeatures() {
+            try {
+                const response = await fetch('/api/v1/features');
+                if (response.ok) {
+                    this.availableFeatures = await response.json();
+                    this.enterpriseFeaturesEnabled = this.availableFeatures.enterprise_features.length > 0;
+                }
+            } catch (error) {
+                console.error('Failed to load features:', error);
             }
         },
 
@@ -146,12 +163,69 @@ const SIPCallApp = {
                 this.historyLoading = true;
                 const response = await window.sipCallAPI.getCallHistory(10);
                 this.callHistory = response.calls;
+                this.totalCount = response.total_count;
+                this.hasMore = response.has_more;
             } catch (error) {
                 console.error('Failed to load call history:', error);
                 this.showError('Failed to load call history');
             } finally {
                 this.historyLoading = false;
             }
+        },
+
+        // Dialpad Section Event Handlers
+        handleStartCall() {
+            this.startCall();
+        },
+        
+        handleEndCall() {
+            this.endCall();
+        },
+        
+        handleAddDigit(digit) {
+            this.destinationNumber += digit;
+        },
+        
+        handleClearNumber() {
+            this.destinationNumber = '';
+        },
+        
+        handleDeleteDigit() {
+            this.destinationNumber = this.destinationNumber.slice(0, -1);
+        },
+
+        // Call Status Section Event Handlers
+        handleToggleMute() {
+            this.toggleMute();
+        },
+        
+        handleToggleHold() {
+            this.toggleHold();
+        },
+        
+        handleTransferCall() {
+            // Implement call transfer functionality
+            console.log('Transfer call requested');
+        },
+
+        // Call History Section Event Handlers
+        handleRefreshHistory() {
+            this.loadCallHistory();
+        },
+        
+        handleLoadMore() {
+            // Implement pagination
+            console.log('Load more history requested');
+        },
+        
+        handleFilterChange(filters) {
+            // Implement filtering
+            console.log('Filter change:', filters);
+        },
+        
+        handleCallDetails(call) {
+            // Show call details modal
+            console.log('Show call details:', call);
         },
 
         /**
@@ -326,62 +400,6 @@ const SIPCallApp = {
         },
 
         /**
-         * Add digit to destination number
-         */
-        addDigit(digit) {
-            this.destinationNumber += digit;
-        },
-
-        /**
-         * Clear destination number
-         */
-        clearNumber() {
-            this.destinationNumber = '';
-        },
-
-        /**
-         * Delete last digit
-         */
-        deleteDigit() {
-            this.destinationNumber = this.destinationNumber.slice(0, -1);
-        },
-
-        /**
-         * Format phone number for display
-         */
-        formatPhoneNumber(number) {
-            if (!number) return '';
-            
-            // Simple formatting - can be enhanced
-            if (number.startsWith('+')) {
-                return number;
-            }
-            
-            // Add formatting based on length
-            if (number.length === 10) {
-                return `(${number.slice(0, 3)}) ${number.slice(3, 6)}-${number.slice(6)}`;
-            }
-            
-            return number;
-        },
-
-        /**
-         * Format call duration
-         */
-        formatDuration(seconds) {
-            if (!seconds) return '0s';
-            
-            const minutes = Math.floor(seconds / 60);
-            const remainingSeconds = seconds % 60;
-            
-            if (minutes > 0) {
-                return `${minutes}m ${remainingSeconds}s`;
-            }
-            
-            return `${remainingSeconds}s`;
-        },
-
-        /**
          * Show error message
          */
         showError(message) {
@@ -396,13 +414,6 @@ const SIPCallApp = {
          */
         clearError() {
             this.error = null;
-        },
-
-        /**
-         * Toggle privacy mode
-         */
-        togglePrivacyMode() {
-            this.privacyMode = !this.privacyMode;
         }
     },
 
@@ -433,132 +444,64 @@ const SIPCallApp = {
                     <h2>SIP Integration</h2>
                     <div class="user-info" v-if="user">
                         Welcome, {{ user.display_name || user.email }}
+                        <span v-if="isAdmin" class="admin-badge">Admin</span>
                     </div>
                 </div>
+
+                <!-- Feature Availability Notice -->
+                <div v-if="enterpriseFeaturesEnabled" class="feature-notice enterprise">
+                    🚀 Enterprise features are available
+                </div>
+                <div v-else class="feature-notice core">
+                    📞 Core calling features are available
+                </div>
+
+                <!-- Admin Dashboard (Enterprise Feature) -->
+                <AdminDashboardSection 
+                    v-if="showAdminDashboard"
+                    :user="user"
+                />
 
                 <!-- Call Interface -->
                 <div class="call-interface">
                     <!-- Dialpad Section -->
-                    <div class="dialpad-section">
-                        <div class="number-input">
-                            <input 
-                                v-model="destinationNumber" 
-                                type="tel" 
-                                placeholder="Enter phone number"
-                                class="phone-input"
-                                :disabled="isCallActive"
-                                @keyup.enter="startCall"
-                            />
-                        </div>
-
-                        <!-- Dialpad Grid -->
-                        <div class="dialpad-grid" v-if="isDialpadVisible">
-                            <button v-for="digit in ['1','2','3','4','5','6','7','8','9','*','0','#']" 
-                                    :key="digit"
-                                    @click="addDigit(digit)"
-                                    class="dialpad-button"
-                                    :disabled="isCallActive">
-                                {{ digit }}
-                            </button>
-                        </div>
-
-                        <!-- Call Actions -->
-                        <div class="call-actions">
-                            <button v-if="!isCallActive" 
-                                    @click="startCall" 
-                                    class="start-call-btn"
-                                    :disabled="!destinationNumber.trim() || loading">
-                                Start Call
-                            </button>
-                            
-                            <button v-if="isCallActive" 
-                                    @click="endCall" 
-                                    class="end-call-btn"
-                                    :disabled="loading">
-                                End Call
-                            </button>
-                        </div>
-                    </div>
+                    <DialpadSection
+                        v-model:destination-number="destinationNumber"
+                        v-model:privacy-mode="privacyMode"
+                        :is-call-active="isCallActive"
+                        :loading="loading"
+                        @start-call="handleStartCall"
+                        @end-call="handleEndCall"
+                        @add-digit="handleAddDigit"
+                        @clear-number="handleClearNumber"
+                        @delete-digit="handleDeleteDigit"
+                    />
 
                     <!-- Call Status Section -->
-                    <div class="call-status-section">
-                        <div class="status-header">
-                            <h3>Call Status</h3>
-                        </div>
-                        
-                        <div class="status-display">
-                            <div class="status-text">{{ callStatusText }}</div>
-                            <div v-if="callStatus === 'answered'" class="call-duration">
-                                {{ formattedDuration }}
-                            </div>
-                        </div>
-
-                        <!-- Call Controls -->
-                        <div v-if="isCallActive" class="call-controls">
-                            <button @click="toggleMute" 
-                                    class="control-btn"
-                                    :class="{ active: isMuted }">
-                                {{ isMuted ? 'Unmute' : 'Mute' }}
-                            </button>
-                            
-                            <button @click="toggleHold" 
-                                    class="control-btn"
-                                    :class="{ active: isOnHold }">
-                                {{ isOnHold ? 'Resume' : 'Hold' }}
-                            </button>
-                        </div>
-
-                        <!-- Privacy Mode -->
-                        <div class="privacy-section">
-                            <h4>Privacy Mode</h4>
-                            <div class="privacy-toggle">
-                                <label class="toggle-label">
-                                    <input type="checkbox" 
-                                           v-model="privacyMode"
-                                           :disabled="isCallActive">
-                                    <span class="toggle-slider"></span>
-                                    Ephemeral Session
-                                </label>
-                            </div>
-                        </div>
-                    </div>
+                    <CallStatusSection
+                        :call-status="callStatus"
+                        :call-duration="callDuration"
+                        :is-call-active="isCallActive"
+                        :is-muted="isMuted"
+                        :is-on-hold="isOnHold"
+                        :current-call="currentCall"
+                        @toggle-mute="handleToggleMute"
+                        @toggle-hold="handleToggleHold"
+                        @transfer-call="handleTransferCall"
+                    />
                 </div>
 
                 <!-- Call History -->
-                <div class="call-history-section">
-                    <div class="history-header">
-                        <h3>Call History</h3>
-                        <button @click="loadCallHistory" class="refresh-btn" :disabled="historyLoading">
-                            {{ historyLoading ? 'Loading...' : 'Refresh' }}
-                        </button>
-                    </div>
-
-                    <div class="history-table">
-                        <div class="table-header">
-                            <div class="col-time">Time</div>
-                            <div class="col-duration">Duration</div>
-                            <div class="col-destination">Destination</div>
-                        </div>
-                        
-                        <div v-if="callHistory.length === 0" class="no-history">
-                            No call history available
-                        </div>
-                        
-                        <div v-for="call in callHistory" 
-                             :key="call.call_id" 
-                             class="history-row">
-                            <div class="col-time">
-                                {{ new Date(call.initiated_at).toLocaleTimeString() }}
-                            </div>
-                            <div class="col-duration">
-                                {{ formatDuration(call.duration_seconds) }}
-                            </div>
-                            <div class="col-destination">
-                                {{ formatPhoneNumber(call.destination_number) }}
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <CallHistorySection
+                    :call-history="callHistory"
+                    :history-loading="historyLoading"
+                    :total-count="totalCount"
+                    :has-more="hasMore"
+                    @refresh-history="handleRefreshHistory"
+                    @load-more="handleLoadMore"
+                    @filter-change="handleFilterChange"
+                    @call-details="handleCallDetails"
+                />
             </div>
         </div>
     `
@@ -566,5 +509,6 @@ const SIPCallApp = {
 
 // Initialize the Vue app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
+    const { createApp } = Vue;
     createApp(SIPCallApp).mount('#sipcall-app');
 });
